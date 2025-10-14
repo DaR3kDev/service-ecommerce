@@ -28,7 +28,11 @@ export class ProductsService {
   // Obtener todos los productos
 
   async getAllProducs(): Promise<Product[]>{
-   return this.database.product.findMany(); //devuelve todos los productos creados 
+   return this.database.product.findMany({
+    include:{
+      Category:true // incluye la relacion con la tabla categoria para que se vea el nombre de la categoria en la respuesta de productos
+    }
+   }); //devuelve todos los productos creados  el metodo findMany de prisma
   }
 
   // Obtener producto por ID
