@@ -25,7 +25,7 @@ export class ProductsService {
   }
 
   // Eliminar producto
-  async remove(id: string) {
+  async remove(id: number) {
     try {
       const deleted = await this.database.product.delete({
         where: { id },
