@@ -1,75 +1,145 @@
-import { Injectable } from '@nestjs/common';
-import { DatabaseService } from 'src/database/database.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, Product } from '@prisma/client';
 import { CreateProductDto } from './dto/create-product.dto';
-import { Product } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
-
-// servicio que contiene la logica de negocio relacionada con los productos
-// se importa el decorador injectable de nestjs, el servicio de prisma, el dto de creacion de productos y el modelo de producto de prisma
+import { ResponseHelper } from '../common/response/response.helper';
+import { DatabaseService } from '../database/database.service';
+import { PaginationDto } from '../common/pagination/dto/pagination.dto';
+import { PaginatedResponse } from '../common/pagination/interfaces/pagination.interface';
+import { PaginationHelper } from '../common/pagination/pagination';
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly database: DatabaseService) {}
 
-  // Crear producto
-  async create(createProductDto: CreateProductDto) {
-    const newProduct = await this.database.product.create({
-      data: {
-        name: createProductDto.name,
-        price: createProductDto.price,
-        stock: createProductDto.stock,
-        status: createProductDto.status,
-        categoryId: createProductDto.categoryId,
+  async create(createProductDto: CreateProductDto): Promise<ResponseHelper<void>> {
+    const { name, price, stock, status, categoryId } = createProductDto;
+
+    const category = await this.database.category.findUnique({
+      where: {
+        id: categoryId,
       },
     });
-    return { message: 'Producto creado correctamente', newProduct };
+
+    if (!category) throw new NotFoundException('Categoría no encontrada');
+
+    const product = await this.database.product.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        categoryId,
+      },
+    });
+
+    if (product) throw new NotFoundException('Producto ya existe');
+
+    await this.database.product.create({
+      data: {
+        name,
+        price,
+        stock,
+        status,
+        categoryId,
+      },
+    });
+    return new ResponseHelper<void>('Producto creado exitosamente');
   }
 
-  // Obtener todos los productos
+  async paginationProduct(
+    paginationDto: PaginationDto,
+  ): Promise<ResponseHelper<PaginatedResponse<Partial<Product>>>> {
+    const { page, limit, search } = paginationDto;
 
-  async getAllProducs(): Promise<Product[]>{
-   return this.database.product.findMany({
-    include:{
-      Category:true // incluye la relacion con la tabla categoria para que se vea el nombre de la categoria en la respuesta de productos
-    }
-   }); //devuelve todos los productos creados  el metodo findMany de prisma
+    const where: Prisma.ProductWhereInput = {
+      ...(search && {
+        OR: [{ name: { contains: search, mode: 'insensitive' } }],
+      }),
+    };
+
+    const products = await this.database.product.findMany({
+      skip: (page - 1) * Number(limit),
+      take: Number(limit),
+      where,
+    });
+
+    const totalProducts = await this.database.product.count({ where });
+
+    const safeProducts = products.map(({ id, name, price, stock, status, categoryId }) => ({
+      id,
+      name,
+      price,
+      stock,
+      status,
+      categoryId,
+    }));
+
+    const paginatedResponse = PaginationHelper.build(
+      safeProducts,
+      totalProducts,
+      Number(page),
+      Number(limit),
+    );
+
+    return new ResponseHelper<PaginatedResponse<Partial<Product>>>(
+      'Productos obtenidos exitosamente',
+      paginatedResponse,
+    );
   }
 
-  // Obtener producto por ID
-  async getProducsById(id: string ): Promise<Product | null>{
-    return this.database.product.findUnique({
-  where: {
-           id
-  }      
-    })
+  async getProductById(id: string): Promise<ResponseHelper<Product>> {
+    const product = await this.database.product.findUnique({
+      where: { id },
+      include: { Category: true },
+    });
+
+    if (!product) throw new NotFoundException('Producto no encontrado');
+
+    return new ResponseHelper<Product>('Producto obtenido exitosamente', product);
   }
 
-  // Actualizar producto
-  async updateProduct(id: string, updateProductDto: UpdateProductDto) {
+  async updateProduct(
+    id: string,
+    updateProductDto: UpdateProductDto,
+  ): Promise<ResponseHelper<Product>> {
+    const product = await this.database.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException('Producto no encontrado');
 
-    return this.database.product.update({
+    const { stock: newStockValue } = updateProductDto;
+    const currentStock = product.stock;
+
+    if (newStockValue == null)
+      return new ResponseHelper<Product>('Producto actualizado sin cambios en stock', product);
+
+    const newStock =
+      newStockValue >= currentStock
+        ? currentStock + (newStockValue - currentStock)
+        : currentStock - (currentStock - newStockValue);
+
+    if (newStock < 0) throw new NotFoundException('Stock insuficiente');
+
+    const updatedProduct = await this.database.product.update({
       where: { id },
       data: {
-        name: updateProductDto.name,
-        price: updateProductDto.price,
-        stock: updateProductDto.stock,
-        categoryId: updateProductDto.categoryId,
-        status: updateProductDto.status,
+        name: updateProductDto.name ?? product.name,
+        price: updateProductDto.price ?? product.price,
+        stock: newStock,
+        categoryId: updateProductDto.categoryId ?? product.categoryId,
+        status: updateProductDto.status ?? product.status,
       },
     });
 
+    return new ResponseHelper<Product>(
+      `Producto actualizado exitosamente. Stock actual: ${updatedProduct.stock}`,
+      updatedProduct,
+    );
   }
 
-  // Eliminar producto
-  async remove(id:string ) {
-    try {
-      const deleted = await this.database.product.delete({
-        where: { id },
-      });
-      return { message: '🗑️ Producto eliminado correctamente', deleted };
-    } catch (error) {
-      console.error('Error al eliminar el producto:', error);
-      throw new Error('❌ Error al eliminar el producto');
-    }
+  async remove(id: string): Promise<ResponseHelper<void>> {
+    const product = await this.database.product.findUnique({ where: { id } });
+
+    if (!product) throw new NotFoundException('Producto no encontrado');
+
+    await this.database.product.delete({ where: { id } });
+
+    return new ResponseHelper<void>('Producto eliminado correctamente');
   }
 }

@@ -9,7 +9,7 @@ datasource db {
 
 model Category {
   id       String    @id @default(cuid())
-  name     String    @db.VarChar(50)
+  name     String    @unique @db.VarChar(50)
   products Product[]
 }
 
