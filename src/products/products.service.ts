@@ -1,15 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { Product } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
 
-// servicio que contiene la logica de negocio relacionada con los productos
-// se importa el decorador injectable de nestjs, el servicio de prisma, el dto de creacion de productos y el modelo de producto de prisma
-
 @Injectable()
 export class ProductsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService) { }
 
   // Crear producto
   async create(createProductDto: CreateProductDto) {
@@ -26,50 +23,67 @@ export class ProductsService {
   }
 
   // Obtener todos los productos
-
-  async getAllProducs(): Promise<Product[]>{
-   return this.database.product.findMany({
-    include:{
-      Category:true // incluye la relacion con la tabla categoria para que se vea el nombre de la categoria en la respuesta de productos
-    }
-   }); //devuelve todos los productos creados  el metodo findMany de prisma
+  async getAllProducs(): Promise<Product[]> {
+    return this.database.product.findMany({
+      include: {
+        Category: true,
+      },
+    });
   }
 
   // Obtener producto por ID
-  async getProducsById(id: string ): Promise<Product | null>{
+  async getProducsById(id: string): Promise<Product | null> {
     return this.database.product.findUnique({
-  where: {
-           id
-  }      
-    })
+      where: { id },
+    });
   }
 
   // Actualizar producto
   async updateProduct(id: string, updateProductDto: UpdateProductDto) {
+    const product = await this.database.product.findUnique({ where: { id } });
 
-    return this.database.product.update({
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    let newStock = product.stock;
+
+    if (updateProductDto.stock !== undefined) {
+      if (updateProductDto.stock < product.stock) {
+        newStock = product.stock - updateProductDto.stock;
+      } else {
+        newStock = product.stock + updateProductDto.stock;
+      }
+
+      if (newStock < 0) {
+        throw new BadRequestException('Stock insuficiente');
+      }
+    }
+
+    const updated = await this.database.product.update({
       where: { id },
       data: {
         name: updateProductDto.name,
         price: updateProductDto.price,
-        stock: updateProductDto.stock,
+        stock: newStock, // Usamos newStock en lugar de updateProductDto.stock
         categoryId: updateProductDto.categoryId,
         status: updateProductDto.status,
       },
     });
 
+    return { message: 'Producto actualizado correctamente', data: updated };
   }
 
   // Eliminar producto
-  async remove(id:string ) {
-    try {
-      const deleted = await this.database.product.delete({
-        where: { id },
-      });
-      return { message: '🗑️ Producto eliminado correctamente', deleted };
-    } catch (error) {
-      console.error('Error al eliminar el producto:', error);
-      throw new Error('❌ Error al eliminar el producto');
+  async remove(id: string) {
+    const product = await this.database.product.findUnique({ where: { id } });
+
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
     }
+
+    const deleted = await this.database.product.delete({ where: { id } });
+
+    return { message: ' Producto eliminado correctamente', data: deleted };
   }
 }
