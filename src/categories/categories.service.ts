@@ -1,51 +1,78 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { DatabaseService } from '../database/database.service'
+import { DatabaseService } from '../database/database.service';
+import { ResponseHelper } from '../common/response/response.helper';
+import { Category } from '@prisma/client';
 
 @Injectable()
 export class CategoriesService {
+  constructor(private readonly databaseService: DatabaseService) {}
 
-  // este constructor es para inyectar el servicio de base de datos
-  constructor(private readonly databaseService: DatabaseService) { }
+  async createCategory(createCategoryDto: CreateCategoryDto): Promise<ResponseHelper<void>> {
+    const { name } = createCategoryDto;
 
-  //crear categoria
-  async createCategory(createCategoryDto: CreateCategoryDto) {
+    const existing = await this.databaseService.category.findFirst({
+      where: {
+        name,
+      },
+    });
 
-    const newCategory = await this.databaseService.category.create({
+    if (existing) throw new NotFoundException('Categoría ya existe');
+
+    await this.databaseService.category.create({
       data: {
-        name: createCategoryDto.name
-      }
+        name,
+      },
     });
-    return { message: 'categoria creada ', newCategory };
+
+    return new ResponseHelper<void>('Categoría creada exitosamente');
   }
 
-  // obtener todas las categorias
-  async getAllCategories() {
-    return this.databaseService.category.findMany(); // devuelve todas las categorias
-  }
-
-// buscar categoria por id
-  async getCategoriesById(id: string) {
-    const category = await this.databaseService.category.findUnique({ where: { id: id } });// busca una categoria por id
-    if (!category) throw new NotFoundException('categoria no encontrada'); // aca estamos usando excepciones de nestjs para manejar errores
-    return category;
-  }
-
-  // actualizar categoria
-  async updateCategories(id: string, updateCategoryDto: UpdateCategoryDto) {
-
-    const updatedCategory = this.databaseService.category.update({ where: { id }, data: { name: updateCategoryDto.name } });
-    return { message: 'categoria actualizada', updatedCategory };
-  }
-
-
-  // eliminar categoria
-  async deletedCategory(id: string) {
-
-    const deletedCategory = await this.databaseService.category.delete({
-      where: { id }
+  async getAllCategories(): Promise<ResponseHelper<Partial<Category>[]>> {
+    const categories = await this.databaseService.category.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     });
-    return { message: 'categoria eliminada', deletedCategory };
+
+    return new ResponseHelper<Partial<Category>[]>('Categorías obtenidas exitosamente', categories);
+  }
+
+  async getCategoryById(id: string): Promise<ResponseHelper<Category>> {
+    const category = await this.databaseService.category.findUnique({ where: { id } });
+
+    if (!category) throw new NotFoundException('Categoría no encontrada');
+
+    return new ResponseHelper<Category>('Categoría obtenida exitosamente', category);
+  }
+
+  async updateCategory(
+    id: string,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<ResponseHelper<void>> {
+    const { name } = updateCategoryDto;
+
+    const existing = await this.databaseService.category.findUnique({ where: { id } });
+
+    if (!existing) throw new NotFoundException('Categoría no encontrada');
+
+    await this.databaseService.category.update({
+      where: { id },
+      data: {
+        name,
+      },
+    });
+
+    return new ResponseHelper<void>('Categoría actualizada correctamente');
+  }
+
+  async deleteCategory(id: string): Promise<ResponseHelper<void>> {
+    const existing = await this.databaseService.category.findUnique({ where: { id } });
+
+    if (!existing) throw new NotFoundException('Categoría no encontrada');
+
+    await this.databaseService.category.delete({ where: { id } });
+
+    return new ResponseHelper<void>('Categoría eliminada exitosamente');
   }
 }
