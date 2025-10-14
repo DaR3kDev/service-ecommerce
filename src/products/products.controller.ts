@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { PaginationDto } from '../common/pagination/dto/pagination.dto'
 //mport { Product } from '@prisma/client';
 
 // controlador que maneja las rutas relacionadas con los productos
@@ -18,7 +19,7 @@ export class ProductsController {
 
   @Get() // ruta para obtener todos los productos
   async getAllProducs() {
-   return this.productsService.getAllProducs();
+    return this.productsService.getAllProducs();
   }
 
   @Get(':id')

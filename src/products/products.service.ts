@@ -65,7 +65,7 @@ export class ProductsService {
       data: {
         name: updateProductDto.name,
         price: updateProductDto.price,
-        stock: newStock, // Usamos newStock en lugar de updateProductDto.stock
+        stock: newStock, // Usa newStock en lugar de updateProductDto.stock
         categoryId: updateProductDto.categoryId,
         status: updateProductDto.status,
       },
@@ -84,6 +84,6 @@ export class ProductsService {
 
     const deleted = await this.database.product.delete({ where: { id } });
 
-    return { message: ' Producto eliminado correctamente', data: deleted };
+    return { message: 'Producto eliminado correctamente', data: deleted };
   }
 }
