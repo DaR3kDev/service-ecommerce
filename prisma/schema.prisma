@@ -14,7 +14,7 @@ model Category {
 }
 
 model Product {
-  id         String   @id @default(cuid())
+  id         Int      @id @default(autoincrement())
   categoryId String?
   name       String   @db.VarChar(50)
   price      Decimal  @db.Decimal(10, 2)
@@ -37,7 +37,7 @@ model Cart {
 model CartItem {
   id        String @id @default(cuid())
   cartId    String
-  productId String
+  productId Int
   quantity  Int    @default(1)
   subtotal  Float
 
